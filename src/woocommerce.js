@@ -1,16 +1,26 @@
-const WooCommerceAPI = require('woocommerce-api');
+const axios = require('axios');
 const logger = require('./logger');
 const config = require('../config.json');
 
 class WooCommerceService {
     constructor() {
-        this.api = new WooCommerceAPI({
-            url: config.woocommerce.url,
-            consumerKey: config.woocommerce.consumer_key,
-            consumerSecret: config.woocommerce.consumer_secret,
-            wpAPI: true,
-            version: config.woocommerce.version,
-            timeout: config.woocommerce.timeout
+        this.baseUrl = `${config.woocommerce.url}/wp-json/wc/v3`;
+        this.consumerKey = config.woocommerce.consumer_key;
+        this.consumerSecret = config.woocommerce.consumer_secret;
+        this.timeout = config.woocommerce.timeout;
+        
+        // Create axios instance with default configuration
+        this.client = axios.create({
+            baseURL: this.baseUrl,
+            timeout: this.timeout,
+            auth: {
+                username: this.consumerKey,
+                password: this.consumerSecret
+            },
+            headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'IPOS-WooCommerce-Stock-Sync/1.0.0'
+            }
         });
     }
 
@@ -27,11 +37,13 @@ class WooCommerceService {
             const perPage = 100; // Maximum allowed by WooCommerce API
             
             while (true) {
-                const response = await this.api.get('products', {
-                    per_page: perPage,
-                    page: page,
-                    status: 'publish', // Only get published products
-                    manage_stock: true // Only get products that manage stock
+                const response = await this.client.get('/products', {
+                    params: {
+                        per_page: perPage,
+                        page: page,
+                        status: 'publish', // Only get published products
+                        manage_stock: true // Only get products that manage stock
+                    }
                 });
 
                 if (!response.data || response.data.length === 0) {
@@ -68,6 +80,10 @@ class WooCommerceService {
 
         } catch (error) {
             logger.error('Error fetching products from WooCommerce:', error);
+            if (error.response) {
+                logger.error(`API Error: ${error.response.status} - ${error.response.statusText}`);
+                logger.error('Response data:', error.response.data);
+            }
             throw error;
         }
     }
@@ -88,7 +104,7 @@ class WooCommerceService {
                 stock_status: stockQuantity > 0 ? 'instock' : 'outofstock'
             };
 
-            const response = await this.api.put(`products/${productId}`, updateData);
+            const response = await this.client.put(`/products/${productId}`, updateData);
             
             if (response.data && response.data.id) {
                 logger.info(`Successfully updated stock for product ID ${productId}`);
@@ -101,8 +117,9 @@ class WooCommerceService {
         } catch (error) {
             logger.error(`Error updating stock for product ID ${productId}:`, error);
             
-            if (error.response && error.response.data) {
-                logger.error('WooCommerce API error details:', error.response.data);
+            if (error.response) {
+                logger.error(`API Error: ${error.response.status} - ${error.response.statusText}`);
+                logger.error('Response data:', error.response.data);
             }
             
             return false;
@@ -168,7 +185,9 @@ class WooCommerceService {
         try {
             logger.info('Testing connection to WooCommerce API...');
             
-            const response = await this.api.get('products', { per_page: 1 });
+            const response = await this.client.get('/products', { 
+                params: { per_page: 1 }
+            });
             
             if (response.data) {
                 logger.info('WooCommerce API connection test successful');
@@ -179,8 +198,9 @@ class WooCommerceService {
             }
         } catch (error) {
             logger.error('WooCommerce API connection test failed:', error);
-            if (error.response && error.response.data) {
-                logger.error('API error details:', error.response.data);
+            if (error.response) {
+                logger.error(`API Error: ${error.response.status} - ${error.response.statusText}`);
+                logger.error('Response data:', error.response.data);
             }
             return false;
         }
@@ -193,9 +213,11 @@ class WooCommerceService {
      */
     async getProductBySku(sku) {
         try {
-            const response = await this.api.get('products', {
-                sku: sku,
-                per_page: 1
+            const response = await this.client.get('/products', {
+                params: {
+                    sku: sku,
+                    per_page: 1
+                }
             });
 
             if (response.data && response.data.length > 0) {
@@ -205,6 +227,9 @@ class WooCommerceService {
             return null;
         } catch (error) {
             logger.error(`Error fetching product by SKU ${sku}:`, error);
+            if (error.response) {
+                logger.error(`API Error: ${error.response.status} - ${error.response.statusText}`);
+            }
             return null;
         }
     }
