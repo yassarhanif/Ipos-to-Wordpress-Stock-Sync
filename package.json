@@ -1,0 +1,23 @@
+{
+  "name": "ipos-woocommerce-stock-sync",
+  "version": "1.0.0",
+  "description": "Windows service to sync stock from local IPOS API to WooCommerce",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "install-service": "node install-service.js",
+    "uninstall-service": "node uninstall-service.js",
+    "test": "node test-sync.js"
+  },
+  "dependencies": {
+    "node-cron": "^3.0.3",
+    "axios": "^1.6.2",
+    "winston": "^3.11.0",
+    "winston-daily-rotate-file": "^4.7.1",
+    "node-windows": "^1.0.0-beta.8",
+    "woocommerce-api": "^1.5.0"
+  },
+  "keywords": ["stock-sync", "woocommerce", "inventory", "windows-service"],
+  "author": "Stock Sync Service",
+  "license": "MIT"
+}

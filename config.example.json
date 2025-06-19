@@ -1,0 +1,30 @@
+{
+  "woocommerce": {
+    "url": "https://your-website.com",
+    "consumer_key": "ck_your_consumer_key_here",
+    "consumer_secret": "cs_your_consumer_secret_here",
+    "version": "wc/v3",
+    "timeout": 30000
+  },
+  "localApi": {
+    "baseUrl": "https://your-local-api-url.com",
+    "searchEndpoint": "/api/products/search",
+    "timeout": 10000
+  },
+  "sync": {
+    "intervalMinutes": 10,
+    "batchSize": 50,
+    "maxRetries": 3,
+    "retryDelayMs": 2000,
+    "enabled": true
+  },
+  "logging": {
+    "level": "info",
+    "maxFiles": "14d",
+    "maxSize": "20m"
+  },
+  "service": {
+    "name": "IPOS-WooCommerce-Stock-Sync",
+    "description": "Syncs inventory stock from local IPOS to WooCommerce every 10 minutes"
+  }
+}
