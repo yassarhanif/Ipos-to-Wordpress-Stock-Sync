@@ -59,35 +59,57 @@ class LocalApiService {
 
     /**
      * Parse the stock data from local API response
-     * @param {Object} data - Raw response data from local API
+     * @param {Object|Array} data - Raw response data from local API
      * @param {string} barcode - The barcode that was searched
      * @returns {Object} Parsed stock data
      */
     parseStockData(data, barcode) {
         try {
-            // Handle different possible response formats
-            let stockData = {};
+            let totalStock = 0;
+            let hasValidData = false;
             
             if (Array.isArray(data)) {
-                // If response is an array, take the first item
-                stockData = data.length > 0 ? data[0] : {};
-            } else if (typeof data === 'object') {
-                // If response is an object, use it directly
-                stockData = data;
+                // If response is an array, sum all stock values for duplicate entries
+                logger.debug(`Processing array response with ${data.length} items for barcode ${barcode}`);
+                
+                for (const item of data) {
+                    if (item && typeof item === 'object') {
+                        const stockValue = this.extractStockQuantity(item);
+                        if (stockValue !== null) {
+                            totalStock += stockValue;
+                            hasValidData = true;
+                        }
+                    }
+                }
+                
+                if (hasValidData) {
+                    logger.info(`Summed stock for ${barcode}: ${totalStock} (from ${data.length} entries)`);
+                } else {
+                    logger.warn(`No valid stock data found in array for barcode ${barcode}`);
+                    return null;
+                }
+                
+            } else if (typeof data === 'object' && data !== null) {
+                // If response is a single object
+                const stockValue = this.extractStockQuantity(data);
+                if (stockValue !== null) {
+                    totalStock = stockValue;
+                    hasValidData = true;
+                } else {
+                    logger.warn(`No valid stock data found in object for barcode ${barcode}`);
+                    return null;
+                }
             } else {
                 logger.warn(`Unexpected data format for barcode ${barcode}:`, typeof data);
                 return null;
             }
 
-            // Extract stock quantity - adjust these field names based on your API response
-            const stockQuantity = this.extractStockQuantity(stockData);
-            
             const result = {
                 barcode: barcode,
-                stockQuantity: stockQuantity,
-                available: stockQuantity !== null,
+                stockQuantity: totalStock,
+                available: hasValidData && totalStock >= 0,
                 lastUpdated: new Date().toISOString(),
-                rawData: stockData // Keep raw data for debugging
+                rawData: data // Keep raw data for debugging
             };
 
             logger.debug(`Parsed stock data for ${barcode}:`, result);
@@ -104,11 +126,12 @@ class LocalApiService {
      * @returns {number|null} Stock quantity or null if not found
      */
     extractStockQuantity(data) {
-        // Common field names for stock quantity
+        // IPOS API specific field names (prioritized order)
         const possibleFields = [
+            'stock',           // Primary field from IPOS API (integer)
+            'stok',            // Secondary field from IPOS API (string with decimal)
             'stock_quantity',
             'stockQuantity',
-            'stock',
             'quantity',
             'qty',
             'available_stock',
@@ -120,14 +143,26 @@ class LocalApiService {
 
         for (const field of possibleFields) {
             if (data.hasOwnProperty(field) && data[field] !== null && data[field] !== undefined) {
-                const quantity = parseInt(data[field], 10);
+                let quantity;
+                
+                // Handle different data types
+                if (typeof data[field] === 'number') {
+                    quantity = data[field];
+                } else if (typeof data[field] === 'string') {
+                    // Parse string values (like "1.000" to 1)
+                    quantity = parseFloat(data[field]);
+                } else {
+                    continue; // Skip non-numeric values
+                }
+                
+                // Validate the quantity
                 if (!isNaN(quantity) && quantity >= 0) {
-                    return quantity;
+                    return Math.floor(quantity); // Return integer stock count
                 }
             }
         }
 
-        logger.warn('Could not find stock quantity in data:', Object.keys(data));
+        logger.warn(`Could not find stock quantity in data for fields [${Object.keys(data).join(', ')}]`);
         return null;
     }
 
